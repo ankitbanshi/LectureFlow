@@ -42,8 +42,8 @@ The easiest way to run the application is using Docker Compose.
 
 1. **Clone the repository:**
 ```bash
-   git clone https://github.com/ankitbanshi/Chunk_Uploader.git
-   cd Chunk_Uploader
+   git clone https://github.com/ankitbanshi/LectureFlow.git
+   cd LectureFlow
 ```
 
 2. **Create a `.env` file in the repository root:**
@@ -145,7 +145,7 @@ npm run dev
 
 ## 📂 Project Structure
 ```
-chunk-uploader/
+LectureFlow/
 ├── docker-compose.yml       # Orchestration
 ├── backend/
 │   ├── index.js            # Main server logic
