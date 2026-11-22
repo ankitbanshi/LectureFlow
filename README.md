@@ -1,180 +1,310 @@
-# Lectureflow
+# LectureFlow
 
-A robust, production-ready file uploader built with **React**, **Node.js**, and **MySQL**. It supports **chunked uploads**, **automatic retries**, **pause/resume capabilities**, and **resiliency** against network failures and server crashes.
+LectureFlow is a resilient video upload and lecture-processing platform built with React, Node.js, MySQL, Redis, and Docker.
 
----
+It supports resumable chunked uploads for 1 GB+ files, verifies file integrity with SHA-256 hashes, transcodes videos into adaptive HLS streams, generates transcripts and searchable timestamps, and produces AI-generated lecture summaries.
 
-## ✨ Features
+## Key Features
 
-- **Chunked Uploading**: Splits large video files into 5MB chunks to bypass server limits and ensure reliability.
-- **Pause & Resume**: Stop uploads and resume exactly where you left off, even after a page refresh.
-- **Fault Tolerance**: Automatically retries failed chunks and handles network interruptions gracefully.
-- **Concurrent Uploading**: Uploads 3 chunks in parallel for maximum speed.
-- **Data Integrity**: Verifies SHA-256 hashes on both client and server to ensure file corruption protection.
-- **Dockerized**: Full `docker-compose` setup for one-command deployment.
-- **Cross-Volume Support**: Handles file moves across Docker volumes gracefully (fixes `EXDEV` errors).
+- Resumable chunked uploads for 1 GB+ video files
+- Automatic chunk retries and configurable concurrent uploads
+- Pause/resume support across page refreshes
+- SHA-256 integrity verification on the client and server
+- FFmpeg HLS transcoding at 360p and 720p
+- Whisper-based speech-to-text transcription
+- Groq-powered lecture summaries
+- Timestamped, searchable transcripts
+- Adaptive HLS playback in React
+- BullMQ workers for asynchronous processing
+- MySQL metadata and processing state
+- Redis-backed job queues
+- Prometheus metrics and Grafana dashboards
+- Docker Compose deployment for AWS EC2 and containerized environments
+- Optional S3-compatible storage integration for deployments
 
----
+## Architecture
 
-## 🛠️ Tech Stack
-
-### Frontend
-- **Framework**: React (Vite)
-- **Styling**: CSS3 (Responsive)
-- **HTTP Client**: Axios (with AbortController for cancellation)
-
-### Backend
-- **Runtime**: Node.js (Express)
-- **Database**: MySQL (using `mysql2` with connection pooling)
-- **File Handling**: Native `fs` streams
-- **Processing Queue**: BullMQ backed by Redis
-
----
-
-## 🚀 Getting Started (Docker)
-
-The easiest way to run the application is using Docker Compose.
-
-### Prerequisites
-- Docker & Docker Compose installed
-
-### Steps
-
-1. **Clone the repository:**
-```bash
-   git clone https://github.com/ankitbanshi/LectureFlow.git
-   cd LectureFlow
+```text
+React / Vite
+     |
+     | Chunked upload API
+     v
+Node.js / Express
+     |
+     +--> MySQL: uploads, videos, jobs, transcripts, insights
+     |
+     +--> Redis / BullMQ
+              |
+              +--> Transcode Worker --> FFmpeg --> HLS 360p / 720p
+              +--> Transcribe Worker -> Whisper --> transcript segments
+              +--> Summary Worker -----> Groq ------> lecture summary
 ```
 
-2. **Create a `.env` file in the repository root:**
+## Processing Pipeline
+
+1. The React client splits a video into chunks and uploads them concurrently.
+2. The backend stores chunk state and validates the final SHA-256 hash.
+3. BullMQ queues the completed video for transcoding.
+4. FFmpeg creates adaptive HLS 360p and 720p outputs.
+5. The transcribe worker extracts audio and sends it to Whisper.
+6. The summary worker sends the transcript to Groq and stores the result.
+7. The React library displays processing status, playback, transcript search, and lecture notes.
+
+## Tech Stack
+
+### Frontend
+
+- React 19
+- Vite
+- React Router
+- Axios
+- HLS.js
+- `hash-wasm`
+
+### Backend
+
+- Node.js
+- Express
+- MySQL 8
+- Redis
+- BullMQ
+- MySQL2
+- Prometheus `prom-client`
+
+### Video and AI Processing
+
+- FFmpeg and FFprobe
+- Whisper HTTP service
+- Groq API
+
+### Infrastructure
+
+- Docker and Docker Compose
+- Prometheus
+- Grafana
+- AWS EC2-compatible deployment
+- S3-compatible object-storage ready
+
+## Prerequisites
+
+- Docker and Docker Compose
+- Node.js 18+ for manual development
+- MySQL 8+ for manual development
+- Redis 7+ for manual development
+- FFmpeg and FFprobe for local worker execution
+- Docker Desktop on Windows
+
+## Docker Deployment
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/ankitbanshi/LectureFlow.git
+cd LectureFlow
+```
+
+2. Create a repository-root `.env` file:
+
 ```env
-MYSQL_ROOT_PASSWORD=choose-a-root-password
-DB_USER=viz_user
-DB_PASSWORD=choose-a-db-password
-DB_NAME=vizexperts_db
+MYSQL_ROOT_PASSWORD=change-me
+DB_USER=lectureflow
+DB_PASSWORD=change-me
+DB_NAME=lectureflow
 DB_EXTERNAL_PORT=3307
 BACKEND_PORT=3002
 FRONTEND_PORT=5173
+
+REDIS_EXTERNAL_PORT=6379
 GROQ_API_KEY=your-groq-api-key
 GROQ_MODEL=llama-3.3-70b-versatile
 WHISPER_MODEL=tiny
+
+PROMETHEUS_PORT=9090
+GRAFANA_PORT=3001
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=change-me
 ```
 
-3. **Run with Docker Compose:**
+Do not commit `.env` files or API keys.
+
+3. Build and start all services:
+
 ```bash
-   docker compose up --build
+docker compose up --build -d
 ```
 
-4. **Access the App:**
-   - **Frontend**: [http://localhost:5173](http://localhost:5173)
-   - **Backend**: [http://localhost:3002](http://localhost:3002)
-   - **Database**: [localhost:3307](localhost:3307) on the host
-   - **Prometheus**: [http://localhost:9090](http://localhost:9090)
-   - **Grafana**: [http://localhost:3001](http://localhost:3001)
+4. Open the application:
 
----
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:3002 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3001 |
+| MySQL | localhost:3307 |
 
-## 💻 Manual Setup (Local Development)
+To view service logs:
 
-If you prefer running without Docker:
+```bash
+docker compose logs -f
+```
 
-### 1. Database Setup
+To stop the application:
 
-Ensure you have a MySQL instance running:
+```bash
+docker compose down
+```
+
+## Manual Development
+
+### 1. Create the MySQL database
+
 ```sql
-CREATE DATABASE vizexperts_db;
-CREATE USER 'viz_user'@'localhost' IDENTIFIED BY 'choose-a-db-password';
-GRANT ALL PRIVILEGES ON vizexperts_db.* TO 'viz_user'@'localhost';
+CREATE DATABASE lectureflow;
+CREATE USER 'lectureflow'@'localhost' IDENTIFIED BY 'change-me';
+GRANT ALL PRIVILEGES ON lectureflow.* TO 'lectureflow'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-> The backend will automatically create tables on startup.
+The backend creates or updates the required tables at startup.
 
-### 2. Backend Setup
+### 2. Configure and start Redis
+
+Start Redis on `localhost:6379`, or update `REDIS_HOST` and `REDIS_PORT`.
+
+### 3. Start the backend
+
 ```bash
 cd backend
 npm install
 ```
 
-Create a `.env` file in the repository root (recommended) or `backend` folder:
+Create `backend/.env` or use a repository-root `.env`:
+
 ```env
 PORT=3002
 DB_HOST=localhost
 DB_PORT=3306
-DB_USER=viz_user
-DB_PASSWORD=choose-a-db-password
-DB_NAME=vizexperts_db
+DB_USER=lectureflow
+DB_PASSWORD=change-me
+DB_NAME=lectureflow
 REDIS_HOST=localhost
 REDIS_PORT=6379
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-Start the server:
+Start the API:
+
 ```bash
 npm run dev
+# or
+npm start
 ```
 
-### 3. Frontend Setup
+### 4. Start the workers
+
+Workers are designed to run in Docker Compose. For manual worker development, install FFmpeg and run each worker directory's package scripts with its required environment variables.
+
+### 5. Start the frontend
+
 ```bash
 cd frontend
 npm install
 ```
 
-Create a `.env` file in the `frontend` folder:
+Create `frontend/.env`:
+
 ```env
 VITE_BACKEND_URL=http://localhost:3002
 ```
 
-Start the client:
+Start Vite:
+
 ```bash
 npm run dev
 ```
 
----
+## API Endpoints
 
-## 📡 API Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | API health/status response |
+| `GET` | `/metrics` | Prometheus application and queue metrics |
+| `GET` | `/upload/status` | Returns received chunks for an upload |
+| `POST` | `/upload/chunk` | Uploads one binary chunk |
+| `POST` | `/upload/finalize` | Verifies and finalizes an upload |
+| `GET` | `/videos` | Lists videos and processing state |
+| `GET` | `/videos/:id` | Returns video details |
+| `GET` | `/media/...` | Serves HLS playlists and media segments |
 
-| Method | Endpoint            | Description                                                                                     |
-|--------|---------------------|-------------------------------------------------------------------------------------------------|
-| GET    | `/upload/status`    | Checks if a file has been partially uploaded. Returns missing chunk indexes.                    |
-| POST   | `/upload/chunk`     | Receives a binary chunk. Headers: `x-upload-id`, `x-chunk-index`, `x-chunk-start`.             |
-| POST   | `/upload/finalize`  | Triggered when all chunks are sent. Reassembles the file and verifies hash.                     |
-| GET    | `/videos`            | Lists finalized lecture videos and their processing status.                                     |
-| GET    | `/videos/:id`        | Returns one finalized lecture video.                                                            |
+Chunk requests include `x-upload-id`, `x-chunk-index`, and `x-chunk-start` headers.
 
----
+## Monitoring
 
-## 📂 Project Structure
-```
+The backend exports queue depth and worker metrics for Prometheus. Prometheus scrapes the backend and worker metric endpoints, while Grafana provides a preconfigured LectureFlow dashboard.
+
+Monitored data includes:
+
+- Transcode, transcription, and summary queue depth
+- Worker job duration and failures
+- Whisper real-time factor
+- Backend processing state
+
+## Project Structure
+
+```text
 LectureFlow/
-├── docker-compose.yml       # Orchestration
+├── docker-compose.yml
 ├── backend/
-│   ├── index.js            # Main server logic
-│   ├── Dockerfile
-│   ├── uploads/            # Final assembled files
-│   └── temp/               # Temporary partial chunks
-└── frontend/
-    ├── src/
-    │   ├── App.jsx         # Main UI & Upload Logic
-    │   └── App.css         # Styling
-    └── Dockerfile
+│   ├── server.js
+│   ├── config/
+│   ├── controllers/
+│   ├── routes/
+│   ├── utils/
+│   ├── tests/
+│   ├── uploads/
+│   ├── temp/
+│   └── workers/
+│       ├── transcode-worker/
+│       ├── transcribe-worker/
+│       ├── summarize-worker/
+│       └── whisper-service/
+├── frontend/
+│   └── src/
+│       ├── api/
+│       ├── components/
+│       ├── hooks/
+│       ├── pages/
+│       └── utils/
+├── monitoring/
+│   ├── prometheus.yml
+│   └── grafana/
+└── tests/
 ```
 
----
+## Troubleshooting
 
-## 🐛 Troubleshooting: Common Issues
+### Docker Desktop is unavailable
 
-### 1. `EXDEV: cross-device link not permitted`
+Start Docker Desktop and wait until `docker version` reports both client and server information.
 
-- **Cause**: Docker volumes for `/temp` and `/uploads` are on different virtual filesystems.
-- **Fix**: The backend uses a custom `moveFile` helper that detects this error and automatically switches to a "Copy & Delete" strategy.
+### Database access is denied
 
-### 2. `409 Conflict` on Finalization
+For manual development, verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in the loaded `.env`.
 
-- **Cause**: The frontend sends the "Finalize" request multiple times.
-- **Fix**: The backend is idempotent; it detects if a file is already being processed and returns a `200 OK` success message instead of an error.
+- Manual backend: use `DB_HOST=localhost`
+- Docker backend: use `DB_HOST=db`
+- Local host connection to the Docker database: use port `DB_EXTERNAL_PORT`, such as `3307`
 
-### 3. Database Connection Failed
+### Redis connection fails
 
-- **Fix**: Ensure the `DB_HOST` in `.env` matches your setup. Use `localhost` for manual runs and `chunk_db` (service name) for Docker.
+For Docker, Redis is available to services as `redis:6379`. For manual development, start a local Redis instance or set `REDIS_HOST` and `REDIS_PORT`.
 
----
+### HLS playback does not work
+
+Confirm FFmpeg produced `master.m3u8`, `360p/index.m3u8`, and `720p/index.m3u8`. Verify the `/media` route and Docker media volume.
+
+### Docker ports are already in use
+
+Change `BACKEND_PORT`, `FRONTEND_PORT`, `DB_EXTERNAL_PORT`, `PROMETHEUS_PORT`, or `GRAFANA_PORT` in `.env`.
