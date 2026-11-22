@@ -3,3 +3,9 @@ body, html, #root {
   width: 100%;
   margin: 0;
 }
+
+body {
+  display: block;
+  background: #f8fafc;
+  color: #1e293b;
+}

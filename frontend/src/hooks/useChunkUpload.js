@@ -46,7 +46,7 @@ export function useChunkUpload() {
           setSuccessData(data);
           setGlobalProgress(100);
           setStatusSafe("COMPLETED");
-      } catch (err) {
+    } catch {
           alert("Finalization failed. Check connection and retry.");
           setStatusSafe("ERROR");
       }
@@ -201,8 +201,8 @@ export function useChunkUpload() {
   }, [pause]);
 
   const startUpload = useCallback(async (file) => {
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-        alert("Only ZIP files allowed");
+    if (!/\.(mp4|mkv|mov|webm)$/i.test(file.name)) {
+        alert("Only MP4, MKV, MOV, and WEBM video files are allowed");
         return;
     }
     

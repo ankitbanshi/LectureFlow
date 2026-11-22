@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: lectureflow-api
+    static_configs:
+      - targets: ["backend:3002"]
+
+  - job_name: lectureflow-transcode
+    static_configs:
+      - targets: ["transcode-worker:9101"]
+
+  - job_name: lectureflow-transcribe
+    static_configs:
+      - targets: ["transcribe-worker:9102"]
+
+  - job_name: lectureflow-summarize
+    static_configs:
+      - targets: ["summarize-worker:9103"]

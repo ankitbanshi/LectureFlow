@@ -18,7 +18,7 @@ export const UploadBox = ({ onFileSelect, disabled, fileName }) => {
         type="file"
         onChange={handleFileChange}
         disabled={disabled}
-        accept=".zip"
+        accept=".mp4,.mkv,.mov,.webm,video/mp4,video/x-matroska,video/quicktime,video/webm"
         style={{ display: 'none' }} 
       />
       <div 
@@ -27,7 +27,7 @@ export const UploadBox = ({ onFileSelect, disabled, fileName }) => {
       >
           <div className="upload-icon">📂</div>
           <p className="upload-text">
-             {fileName ? <span className="selected-file">{fileName}</span> : "Click to Browse or Drag ZIP file"}
+             {fileName ? <span className="selected-file">{fileName}</span> : "Click to Browse or Drag video file"}
           </p>
       </div>
     </div>

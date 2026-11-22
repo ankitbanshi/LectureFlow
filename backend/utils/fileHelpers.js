@@ -2,11 +2,14 @@ const fs = require("fs").promises;
 const fsSync = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const yauzl = require("yauzl");
 const pool = require("../config/db");
+const { transcodeQueue } = require("../config/queue");
+const logger = require("../config/logger");
+const { uploadSuccessTotal, uploadFailureTotal, hashMismatchTotal } = require("../config/metrics");
 
 const UPLOADS_DIR = path.join(__dirname, "../uploads");
 const TEMP_DIR = path.join(__dirname, "../temp");
+const MEDIA_DIR = path.join(__dirname, "../media");
 const finalizeLocks = new Map();
 
 async function moveFile(source, target) {
@@ -37,30 +40,56 @@ async function processFinalizationInBackground(uploadId, uploadData) {
     for await (const chunk of stream) hash.update(chunk);
     const finalHash = hash.digest("hex");
 
-    let zipContents = [];
-    if (uploadData.file_name.endsWith(".zip")) {
-      await new Promise((resolve) => {
-        yauzl.open(finalFile, { lazyEntries: true }, (err, zipfile) => {
-          if (err || !zipfile) return resolve();
-          zipfile.readEntry();
-          zipfile.on("entry", (e) => {
-            zipContents.push(e.fileName);
-            if (zipContents.length < 20) zipfile.readEntry();
-            else zipfile.close();
-          });
-          zipfile.on("end", resolve);
-          zipfile.on("error", resolve);
-        });
-      });
+    if (finalHash !== uploadData.file_hash) {
+      hashMismatchTotal.inc();
+      await fs.unlink(finalFile);
+      throw new Error("SHA-256 verification failed");
     }
 
-    await pool.query(
-      'UPDATE uploads SET status = "COMPLETED", final_hash = ? WHERE id = ?',
-      [finalHash, uploadId]
+    const connection = await pool.getConnection();
+    let videoId;
+    try {
+      await connection.beginTransaction();
+      await connection.query(
+        'UPDATE uploads SET status = "COMPLETED", final_hash = ? WHERE id = ?',
+        [finalHash, uploadId]
+      );
+
+      await connection.query(
+        `INSERT INTO videos (upload_id, title, original_filename)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [uploadId, path.parse(uploadData.file_name).name, uploadData.file_name]
+      );
+      [[{ id: videoId }]] = await connection.query(
+        "SELECT id FROM videos WHERE upload_id = ?",
+        [uploadId]
+      );
+
+      await connection.query(
+        `INSERT INTO jobs (video_id, stage)
+         VALUES (?, 'transcode')
+         ON DUPLICATE KEY UPDATE video_id = VALUES(video_id)`,
+        [videoId]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    await transcodeQueue.add(
+      "transcode",
+      { videoId, uploadId, fileName: path.basename(finalFile) },
+      { jobId: `transcode-${videoId}` }
     );
-    console.log(`[Background] Finalization complete for ${uploadId}`);
+    uploadSuccessTotal.inc();
+    logger.info({ uploadId, videoId }, "Upload finalized and transcode queued");
   } catch (err) {
-    console.error(`[Background] Failed for ${uploadId}:`, err);
+    uploadFailureTotal.inc();
+    logger.error({ err, uploadId }, "Upload finalization failed");
     await pool.query('UPDATE uploads SET status = "FAILED" WHERE id = ?', [
       uploadId,
     ]);
@@ -95,6 +124,7 @@ async function cleanupOrphanedUploads() {
 module.exports = {
   UPLOADS_DIR,
   TEMP_DIR,
+  MEDIA_DIR,
   finalizeLocks,
   moveFile,
   processFinalizationInBackground,

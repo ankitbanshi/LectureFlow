@@ -7,12 +7,19 @@ const {
   finalizeLocks,
   processFinalizationInBackground,
 } = require("../utils/fileHelpers");
+const { chunkRetryTotal } = require("../config/metrics");
+
+const VIDEO_FILE_PATTERN = /\.(mp4|mkv|mov|webm)$/i;
 
 exports.checkStatus = async (req, res) => {
   try {
     const { fileHash, fileName, fileSize } = req.query;
     if (!fileHash || !fileName || !fileSize)
       return res.status(400).json({ error: "Missing params" });
+    if (!VIDEO_FILE_PATTERN.test(fileName))
+      return res.status(400).json({
+        error: "Only MP4, MKV, MOV, and WEBM video files are allowed",
+      });
 
     const totalChunks = Math.ceil(parseInt(fileSize) / (5 * 1024 * 1024));
 
@@ -106,6 +113,7 @@ exports.receiveChunk = async (req, res) => {
     );
     res.json({ status: "CHUNK_RECEIVED" });
   } catch (err) {
+    chunkRetryTotal.inc();
     console.error(`Chunk ${chunkIndex} error:`, err.message);
     res.status(500).json({ error: err.message });
   }
@@ -113,6 +121,8 @@ exports.receiveChunk = async (req, res) => {
 
 exports.finalizeUpload = async (req, res) => {
   const { uploadId } = req.body;
+
+  if (!uploadId) return res.status(400).json({ error: "Missing uploadId" });
 
   if (finalizeLocks.has(uploadId)) {
     return res.json({
@@ -128,6 +138,19 @@ exports.finalizeUpload = async (req, res) => {
       uploadId,
     ]);
     if (upload.length === 0) throw new Error("Upload not found");
+
+    const [existingVideo] = await pool.query(
+      "SELECT id FROM videos WHERE upload_id = ?",
+      [uploadId]
+    );
+    if (existingVideo.length > 0) {
+      return res.json({
+        status: "COMPLETED",
+        message: "Video is already finalized.",
+        videoId: existingVideo[0].id,
+        file_name: upload[0].file_name,
+      });
+    }
 
     const [chunks] = await pool.query(
       'SELECT COUNT(*) as cnt FROM chunks WHERE upload_id = ? AND status = "RECEIVED"',

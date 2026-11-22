@@ -1,10 +1,19 @@
+import { createSHA256 } from "hash-wasm";
+
 const CHUNK_SIZE = 5 * 1024 * 1024;
+
 export const calculateFileHash = async (file) => {
-  const buffer = await file.slice(0, 2 * 1024 * 1024).arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const hasher = await createSHA256();
+  const hashReadSize = 8 * 1024 * 1024;
+
+  for (let start = 0; start < file.size; start += hashReadSize) {
+    const buffer = await file
+      .slice(start, Math.min(start + hashReadSize, file.size))
+      .arrayBuffer();
+    hasher.update(new Uint8Array(buffer));
+  }
+
+  return hasher.digest();
 };
 
 export const createChunkMap = (fileSize, completedIndices = []) => {

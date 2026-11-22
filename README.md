@@ -6,7 +6,7 @@ A robust, production-ready file uploader built with **React**, **Node.js**, and 
 
 ## ✨ Features
 
-- **Chunked Uploading**: Splits large files (ZIPs) into 5MB chunks to bypass server limits and ensure reliability.
+- **Chunked Uploading**: Splits large video files into 5MB chunks to bypass server limits and ensure reliability.
 - **Pause & Resume**: Stop uploads and resume exactly where you left off, even after a page refresh.
 - **Fault Tolerance**: Automatically retries failed chunks and handles network interruptions gracefully.
 - **Concurrent Uploading**: Uploads 3 chunks in parallel for maximum speed.
@@ -26,7 +26,8 @@ A robust, production-ready file uploader built with **React**, **Node.js**, and 
 ### Backend
 - **Runtime**: Node.js (Express)
 - **Database**: MySQL (using `mysql2` with connection pooling)
-- **File Handling**: Native `fs` streams & `yauzl` for ZIP inspection
+- **File Handling**: Native `fs` streams
+- **Processing Queue**: BullMQ backed by Redis
 
 ---
 
@@ -42,18 +43,34 @@ The easiest way to run the application is using Docker Compose.
 1. **Clone the repository:**
 ```bash
    git clone https://github.com/ankitbanshi/Chunk_Uploader.git
-   cd chunk-uploader
+   cd Chunk_Uploader
 ```
 
-2. **Run with Docker Compose:**
+2. **Create a `.env` file in the repository root:**
+```env
+MYSQL_ROOT_PASSWORD=choose-a-root-password
+DB_USER=viz_user
+DB_PASSWORD=choose-a-db-password
+DB_NAME=vizexperts_db
+DB_EXTERNAL_PORT=3307
+BACKEND_PORT=3002
+FRONTEND_PORT=5173
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=llama-3.3-70b-versatile
+WHISPER_MODEL=tiny
+```
+
+3. **Run with Docker Compose:**
 ```bash
-   docker-compose up --build
+   docker compose up --build
 ```
 
-3. **Access the App:**
+4. **Access the App:**
    - **Frontend**: [http://localhost:5173](http://localhost:5173)
    - **Backend**: [http://localhost:3002](http://localhost:3002)
-   - **Database**: Port 3306 (Internal)
+   - **Database**: [localhost:3307](localhost:3307) on the host
+   - **Prometheus**: [http://localhost:9090](http://localhost:9090)
+   - **Grafana**: [http://localhost:3001](http://localhost:3001)
 
 ---
 
@@ -65,7 +82,10 @@ If you prefer running without Docker:
 
 Ensure you have a MySQL instance running:
 ```sql
-CREATE DATABASE chunked_upload_db;
+CREATE DATABASE vizexperts_db;
+CREATE USER 'viz_user'@'localhost' IDENTIFIED BY 'choose-a-db-password';
+GRANT ALL PRIVILEGES ON vizexperts_db.* TO 'viz_user'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
 > The backend will automatically create tables on startup.
@@ -76,18 +96,21 @@ cd backend
 npm install
 ```
 
-Create a `.env` file in the `backend` folder:
+Create a `.env` file in the repository root (recommended) or `backend` folder:
 ```env
 PORT=3002
 DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=yourpassword
-DB_NAME=chunked_upload_db
+DB_PORT=3306
+DB_USER=viz_user
+DB_PASSWORD=choose-a-db-password
+DB_NAME=vizexperts_db
+REDIS_HOST=localhost
+REDIS_PORT=6379
 ```
 
 Start the server:
 ```bash
-node server.js
+npm run dev
 ```
 
 ### 3. Frontend Setup
@@ -115,6 +138,8 @@ npm run dev
 | GET    | `/upload/status`    | Checks if a file has been partially uploaded. Returns missing chunk indexes.                    |
 | POST   | `/upload/chunk`     | Receives a binary chunk. Headers: `x-upload-id`, `x-chunk-index`, `x-chunk-start`.             |
 | POST   | `/upload/finalize`  | Triggered when all chunks are sent. Reassembles the file and verifies hash.                     |
+| GET    | `/videos`            | Lists finalized lecture videos and their processing status.                                     |
+| GET    | `/videos/:id`        | Returns one finalized lecture video.                                                            |
 
 ---
 

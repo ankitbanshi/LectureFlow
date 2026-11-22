@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {"title":"Uploads and failures","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"increase(upload_success_total[5m])","legendFormat":"successful uploads"},{"expr":"increase(upload_failure_total[5m])","legendFormat":"failed uploads"},{"expr":"increase(hash_mismatch_total[5m])","legendFormat":"hash mismatches"}]},
+    {"title":"Queue depth","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"queue_depth","legendFormat":"{{queue}}"}]},
+    {"title":"Job duration","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, stage) (rate(job_duration_seconds_bucket[5m])))","legendFormat":"p95 {{stage}}"}]},
+    {"title":"Job failures","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"increase(job_failures_total[5m])","legendFormat":"{{stage}}"}]},
+    {"title":"Whisper real-time factor","type":"stat","gridPos":{"h":6,"w":8,"x":0,"y":16},"targets":[{"expr":"whisper_real_time_factor","legendFormat":"RTF"}]},
+    {"title":"Chunk retries","type":"stat","gridPos":{"h":6,"w":8,"x":8,"y":16},"targets":[{"expr":"increase(chunk_retry_total[1h])","legendFormat":"retries"}]}
+  ],
+  "schemaVersion": 39,
+  "style":"dark",
+  "tags":["lectureflow"],
+  "templating":{"list":[]},
+  "time":{"from":"now-6h","to":"now"},
+  "title":"LectureFlow Operations",
+  "uid":"lectureflow-ops",
+  "version":1
+}
