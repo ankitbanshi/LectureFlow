@@ -1,4 +1,4 @@
-# Resilient Chunked File Uploader
+# Lectureflow
 
 A robust, production-ready file uploader built with **React**, **Node.js**, and **MySQL**. It supports **chunked uploads**, **automatic retries**, **pause/resume capabilities**, and **resiliency** against network failures and server crashes.
 
